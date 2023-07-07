@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": "out", // 输出的文件夹
+    "sourceMap": true,
+    "lib": ["ES5"],
+    "types": ["node"],
+    "esModuleInterop": true,
+    "moduleResolution": "node"
+  }
+} 
