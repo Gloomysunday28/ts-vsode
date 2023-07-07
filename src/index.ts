@@ -21,7 +21,7 @@ export default class ScoreDetailPage extends Component<
     score: void 0,
   };
 
-  raFrameScore(current_score: number) {
+  raFrameScore = (current_score: number) => {
     const getScore = () => {
       return 321
     };
@@ -50,8 +50,8 @@ export default class ScoreDetailPage extends Component<
     obj.s = false
     obj.d = d
     obj.f = 'true'
-    return () => {
-      return 1
+    return (a) => {
+      return a
     }
   }
 }

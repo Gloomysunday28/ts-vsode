@@ -123,7 +123,7 @@ export default function () {
         }
       } else {
         path.node.returnType = t.typeAnnotation(
-          generateTsAstMaps[argument.type]()
+          argument?.type ? generateTsAstMaps[argument.type](argument) :  t.voidTypeAnnotation()
         );
       }
     },

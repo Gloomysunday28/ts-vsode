@@ -4,24 +4,25 @@ import type {
   ObjectTypeProperty,
   ObjectTypeSpreadProperty,
   Identifier,
-  FunctionTypeParam,
-  TypeParameterDeclaration,
   FlowType,
-  Node
+  Node,
+  Flow
 } from "@babel/types";
 const t = require("@babel/types");
 
 //  js类型与ts ast映射关系
 const generateTsAstMap: {
-  [key: string]: (...args: unknown[]) => FlowType
+  [key: string]: (...args: unknown[]) => any
 } = {
   NumericLiteral: t.numberTypeAnnotation,
   StringLiteral: t.stringTypeAnnotation,
   BooleanLiteral: t.booleanTypeAnnotation,
-  ArrowFunctionExpression: (node: TypeParameterDeclaration, params: Array<FunctionTypeParam>, rest: FunctionTypeParam, returnType: FlowType) => {
+  ArrowFunctionExpression: (node: UnionFlowType<Flow, 'ArrowFunctionExpression'>) => {
+    const { params } = node
+    const paramsType = t.typeParameterDeclaration([t.typeParameter()])
     // return t.functionTypeAnnotation(node, params, rest, returnType);
 
-    return  t.functionTypeAnnotation(node, params, rest, returnType);
+    // return t.objectTypeAnnotation(node);
   },
   ObjectExpression: <
     T extends {

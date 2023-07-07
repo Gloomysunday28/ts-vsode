@@ -6,6 +6,7 @@
     "lib": ["ES5"],
     "types": ["node"],
     "esModuleInterop": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "strict": false
   }
 } 
