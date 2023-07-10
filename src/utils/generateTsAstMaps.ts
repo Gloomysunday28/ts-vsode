@@ -1,28 +1,119 @@
 import type { GenerateTsAstMapsOption } from "../interface/generateTsAstMapsDto";
-import type { KeyofObject, UnionFlowType } from "../interface";
+import type { KeyofObject, UnionFlowType, LowCaseCame } from "../interface";
+import handleTsAst from "./handleTsAst";
 import type {
   ObjectTypeProperty,
   ObjectTypeSpreadProperty,
-  Identifier,
+  Identifier, // JSType
   FlowType,
-  Node,
-  Flow
+  Node, // JSType
+  Flow, // FlowType
+  TSType, // TSType
 } from "@babel/types";
 const t = require("@babel/types");
 
-//  js类型与ts ast映射关系
-const generateTsAstMap: {
-  [key: string]: (...args: unknown[]) => any
-} = {
-  NumericLiteral: t.numberTypeAnnotation,
-  StringLiteral: t.stringTypeAnnotation,
-  BooleanLiteral: t.booleanTypeAnnotation,
-  ArrowFunctionExpression: (node: UnionFlowType<Flow, 'ArrowFunctionExpression'>) => {
-    const { params } = node
-    const paramsType = t.typeParameterDeclaration([t.typeParameter()])
-    // return t.functionTypeAnnotation(node, params, rest, returnType);
+// TSType与FlowType都可以作为类型
 
-    // return t.objectTypeAnnotation(node);
+// js类型与Ts type的影射关系
+const generateTsTypeMap: {
+  [key: string]: (...args: unknown[]) => TSType | TSType[]
+} = {
+  TSNumberKeyword: t.tsNumberKeyword,
+  TSStringKeyword: t.tsStringKeyword,
+  TSBooleanKeyword: t.tsBooleanKeyword,
+  NumericLiteral: t.tsNumberKeyword, // js表达式
+  StringLiteral: t.tsStringKeyword,
+  BooleanLiteral: t.tsBooleanKeyword,
+  TsTypeParameterDeclaration: (params: UnionFlowType<Node, 'Identifier'>[]) => {
+    return t.tsTypeParameterDeclaration(params.map(param => {
+      const type = (param.typeAnnotation as UnionFlowType<Node, 'TSTypeAnnotation'>).typeAnnotation?.type
+      return type ? t.tsTypeParameter(t[(type.slice(0, 2).toLowerCase() + type.slice(2)) as LowCaseCame<typeof type, 2>]?.(), null, param.name) : null
+    }))
+  },
+  ObjectExpression: <
+    T extends {
+      init: {
+        properties: Array<ObjectTypeProperty | ObjectTypeSpreadProperty>;
+      };
+      id: keyof Node
+    }
+  >(
+    node: T | ObjectTypeProperty[] | ObjectTypeSpreadProperty[],
+    path,
+    option?: GenerateTsAstMapsOption
+  ) => {
+    if (Array.isArray(node)) {
+      return node[0];
+    } else {
+      const {
+        init: { properties },
+        id: key
+      } = node;
+      return t.tsParenthesizedType(
+        t.tsTypeLiteral(
+          properties.map((propert: ObjectTypeProperty) => {
+            if ((propert as ObjectTypeProperty).key) {
+              return t.tsPropertySignature(
+                key,
+                t.tsTypeAnnotation(generateTsTypeMap[propert.value.type](node, path)),
+                key
+              );
+            }
+          })
+        )
+      );
+    }
+  },
+  MemberExpression: (node: UnionFlowType<Node, 'MemberExpression'>, path: any, option?: GenerateTsAstMapsOption) => {
+    const {
+      property,
+    } = node;
+    const { parent } = path;
+    if (property.type === 'Identifier') {
+      return t.tsPropertySignature(
+        property,
+        t.tsTypeAnnotation(generateTsTypeMap[parent.right.type](parent, path, option)),
+        property
+      );
+    } else if (property.type === 'PrivateName') {
+
+    } else { // expression 表达式
+
+    }
+  },
+  ArrowFunctionExpression: (node: UnionFlowType<Flow, 'ArrowFunctionExpression'>, path, {
+    tsTypes
+  }: GenerateTsAstMapsOption) => {
+    const { params = [] } = node
+    const paramsType = generateTsTypeMap.TsTypeParameterDeclaration(params)
+
+    return t.tsFunctionType(paramsType, params.map(param => t.identifier(param.name)), handleTsAst.Identifier(path, tsTypes, true));
+  },
+}
+
+//  js类型与Flow ast映射关系
+const generateFlowTypeMap: {
+  [key: string]: (...args: unknown[]) => Flow | Flow[]
+} = {
+  NumericLiteral: t.numberTypeAnnotation, // js表达式
+  TSNumberKeyword: t.numberTypeAnnotation, // TS类型
+  StringLiteral: t.stringTypeAnnotation,
+  TSStringKeyword: t.stringTypeAnnotation,
+  BooleanLiteral: t.booleanTypeAnnotation,
+  TSBooleanKeyword: t.booleanTypeAnnotation,
+  ParamterDeclaration: (params: UnionFlowType<Node, 'Identifier'>[]) => {
+    return t.typeParameterDeclaration(params.map(param => t.typeParameter(t.typeAnnotation(generateFlowTypeMap[(param.typeAnnotation as UnionFlowType<Node, 'TSTypeAnnotation'>).typeAnnotation?.type]?.()))))
+  },
+  FunctionTypeParam: (params: UnionFlowType<Node, 'Identifier'>[]) => {
+    return params?.map(param => t.functionTypeParam(t.identifier(param.name), generateFlowTypeMap[(param.typeAnnotation as UnionFlowType<Node, 'TSTypeAnnotation'>).typeAnnotation?.type]?.()))
+  },
+  FunctionExpression: (node: UnionFlowType<Flow, 'ArrowFunctionExpression'>) => {
+    const { params } = node
+    const paramsType = generateFlowTypeMap.ParamterDeclaration(params)
+    const functionParams = generateFlowTypeMap.FunctionTypeParam(params)
+    const restParams = null
+
+    return t.functionTypeAnnotation(paramsType, functionParams, restParams, t.anyTypeAnnotation());
   },
   ObjectExpression: <
     T extends {
@@ -46,7 +137,7 @@ const generateTsAstMap: {
           if ((propert as ObjectTypeProperty).key) {
             return t.objectTypeProperty(
               t.stringLiteral((propert.key as Identifier)?.name || propert.key),
-              generateTsAstMap[propert.value.type](node, path),
+              generateFlowTypeMap[propert.value.type](node, path),
               option.optional ? t.variance("minus") : null
             );
           }
@@ -58,8 +149,8 @@ const generateTsAstMap: {
     const {
       right: { type },
     } = node;
-    
-    return generateTsAstMap[type](node);
+
+    return generateFlowTypeMap[type](node);
   },
   MemberExpression: (node: UnionFlowType<Node, 'MemberExpression'>, path: any, option?: GenerateTsAstMapsOption) => {
     const {
@@ -70,7 +161,7 @@ const generateTsAstMap: {
       const { name } = property
       return t.objectTypeProperty(
         t.stringLiteral(name),
-        generateTsAstMap[parent.right.type](parent, path, option),
+        generateFlowTypeMap[parent.right.type](parent, path, option),
         option.optional ? t.variance("minus") : null
       );
     } else if (property.type === 'PrivateName') {
@@ -96,13 +187,15 @@ const curdGenerateTsAstMap = {
     return node;
   },
   // 基础类型转换成联合类型
-  BaseTypeUnionAnnotation: (node: FlowType | FlowType[], value: FlowType | FlowType[]): UnionFlowType<Node, 'TupleTypeAnnotation'> => {
-    return t.unionTypeAnnotation((Array.isArray(node) ? node : [node]).concat(value));
+  BaseTypeUnionAnnotation: (node: FlowType | FlowType[], value: FlowType | FlowType[], isTsType: boolean = false): UnionFlowType<Node, 'TupleTypeAnnotation'> => {
+    return (isTsType ? t.tsUnionType : t.unionTypeAnnotation)((Array.isArray(node) ? node : [node]).concat(value));
   },
 };
 
-export const generateTsAstMaps: KeyofObject<typeof generateTsAstMap> =
-  generateTsAstMap;
+export const generateTsTypeMaps: KeyofObject<typeof generateTsTypeMap> =
+  generateTsTypeMap;
+export const generateFlowTypeMaps: KeyofObject<typeof generateFlowTypeMap> =
+  generateFlowTypeMap;
 export const curdGenerateTsAstMaps: KeyofObject<typeof curdGenerateTsAstMap> =
   curdGenerateTsAstMap;
 export { baseTsAstMaps };
