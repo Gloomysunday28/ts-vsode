@@ -187,8 +187,8 @@ const curdGenerateTsAstMap = {
     return node;
   },
   // 基础类型转换成联合类型
-  BaseTypeUnionAnnotation: (node: FlowType | FlowType[], value: FlowType | FlowType[], isTsType: boolean = false): UnionFlowType<Node, 'TupleTypeAnnotation'> => {
-    return (isTsType ? t.tsUnionType : t.unionTypeAnnotation)((Array.isArray(node) ? node : [node]).concat(value));
+  BaseTypeUnionAnnotation: (node: FlowType | FlowType[], value: FlowType | FlowType[]): UnionFlowType<Node, 'TupleTypeAnnotation'> => {
+    return t.unionTypeAnnotation((Array.isArray(node) ? node : [node]).concat(value));
   },
 };
 
