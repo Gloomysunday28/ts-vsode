@@ -3,12 +3,8 @@ import {
   curdGenerateTsAstMaps,
   baseTsAstMaps,
 } from "../utils/generateTsAstMaps";
-import type {
-  Flow,
-  Node,
-  TSTypeElement,
-  TSPropertySignature,
-} from "@babel/types";
+import handleTsAstMaps from "./handleTsAstMaps";
+import type { Flow, Node } from "@babel/types";
 import { UnionFlowType, SureFlowType } from "../interface";
 const t = require("@babel/types");
 
@@ -52,61 +48,43 @@ const postmathClassMethodTsAst = (ClassMethodTsTypes: Flow[]) => {
 
   return redundancFlowArray;
 };
-const handleRerencePath = (
-  referencePath,
-  generateTsFlowMaps,
-  ClassMethodTsTypes
-) => {
+
+export const handleRerencePath = (referencePath, ClassMethodTsTypes) => {
   (referencePath || []).forEach((path) => {
     const containerNode = path.container;
-    if (t.isMemberExpression(containerNode)) {
-      const property = containerNode.property.name as string;
-      const isIdentifier = t.isIdentifier(path.parentPath.container.right);
-      if (isIdentifier) {
-        const variable = path.parentPath.scope.bindings[property];
-        (variable.path.container || [])?.forEach((node) => {
-          const key = node.id?.name;
-          ClassMethodTsTypes.push(
-            t.objectTypeProperty(
-              t.stringLiteral(key),
-              generateTsFlowMaps[node.init.type](node, path, {
-                optional: t.isBlockStatement(path.scope.block),
-              })
-            )
-          );
-        });
-
-        const curentTsNode = ClassMethodTsTypes.find(
-          (tsnode) => tsnode.key.value === property
-        );
-        if (curentTsNode) {
-          curentTsNode.value = curdGenerateTsAstMaps[
-            baseTsAstMaps.includes(curentTsNode.value?.type)
-              ? "BaseTypeUnionAnnotation"
-              : curentTsNode.value?.type
-          ]?.(
-            curentTsNode.value,
-            handleRerencePath(
-              variable.referencePaths?.filter(
-                (refer) => refer.key !== "right"
-              ) || [],
-              generateTsFlowMaps,
-              []
-            )
-          );
-        }
-      } else {
-        const { parentPath } = path;
-        ClassMethodTsTypes.push(
-          generateTsFlowMaps[parentPath.type](parentPath.node, parentPath, {
-            optional: t.isBlockStatement(parentPath.scope.block),
-          })
-        );
-      }
+    if (handleTsAstMaps[containerNode.type]) {
+      handleTsAstMaps[containerNode.type]?.(
+        containerNode,
+        ClassMethodTsTypes,
+        path
+      );
     }
   });
 
   return ClassMethodTsTypes;
+};
+
+export const handlePath = (referencePath, ClassMethodTsTypes) => {
+  referencePath?.path?.container.forEach((node) => {
+    if (handleTsAstMaps[node.type]) {
+      handleTsAstMaps[node.type]?.(
+        node,
+        ClassMethodTsTypes,
+        referencePath?.path
+      );
+    }
+  });
+
+if (ClassMethodTsTypes.length) {
+  const returnASTNode = ClassMethodTsTypes[0]
+  const restReferencePaths = referencePath.referencePaths?.filter(path => (
+    path.key !== 'body' && path.key !== 'right'
+  ))
+  handleRerencePath(restReferencePaths, returnASTNode.properties)
+  returnASTNode.properties = postmathClassMethodTsAst(returnASTNode.properties)
+  
+  return returnASTNode
+}
 };
 
 export default {
@@ -114,11 +92,13 @@ export default {
     const referencePath = bindScopePath.referencePaths.filter(
       (path) => !t.isReturnStatement(path.parentPath.node)
     );
-    handleRerencePath(referencePath, generateFlowTypeMaps, ClassMethodTsTypes);
+    handleRerencePath(referencePath, ClassMethodTsTypes);
     const { type } = bindScopePath.path.node.init;
-    const returnType = generateFlowTypeMaps[type]?.(
-      postmathClassMethodTsAst(ClassMethodTsTypes)
-    );
+    const returnType = baseTsAstMaps.includes(type)
+      ? generateFlowTypeMaps[type]()
+      : generateFlowTypeMaps[type]?.(
+          postmathClassMethodTsAst(ClassMethodTsTypes)
+        );
 
     return returnType;
   },

@@ -50,7 +50,7 @@ export default class ScoreDetailPage extends Component<
     obj.s = false
     obj.d = d
     obj.f = 'true'
-    return obj
+    return () => obj.s
   }
 }
 `;

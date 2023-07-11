@@ -1,6 +1,6 @@
 import type { GenerateTsAstMapsOption } from "../interface/generateTsAstMapsDto";
 import type { KeyofObject, UnionFlowType, LowCaseCame } from "../interface";
-import handleTsAst from "./handleTsAst";
+import handleTsAst, { handlePath } from "./handleTsAst";
 import type {
   ObjectTypeProperty,
   ObjectTypeSpreadProperty,
@@ -16,7 +16,7 @@ const t = require("@babel/types");
 
 // js类型与Ts type的影射关系
 const generateTsTypeMap: {
-  [key: string]: (...args: unknown[]) => TSType | TSType[]
+  [key: string]: (...args: unknown[]) => TSType | TSType[];
 } = {
   TSNumberKeyword: t.tsNumberKeyword,
   TSStringKeyword: t.tsStringKeyword,
@@ -24,18 +24,33 @@ const generateTsTypeMap: {
   NumericLiteral: t.tsNumberKeyword, // js表达式
   StringLiteral: t.tsStringKeyword,
   BooleanLiteral: t.tsBooleanKeyword,
-  TsTypeParameterDeclaration: (params: UnionFlowType<Node, 'Identifier'>[]) => {
-    return t.tsTypeParameterDeclaration(params.map(param => {
-      const type = (param.typeAnnotation as UnionFlowType<Node, 'TSTypeAnnotation'>).typeAnnotation?.type
-      return type ? t.tsTypeParameter(t[(type.slice(0, 2).toLowerCase() + type.slice(2)) as LowCaseCame<typeof type, 2>]?.(), null, param.name) : null
-    }))
+  TsTypeParameterDeclaration: (params: UnionFlowType<Node, "Identifier">[]) => {
+    return t.tsTypeParameterDeclaration(
+      params.map((param) => {
+        const type = (
+          param.typeAnnotation as UnionFlowType<Node, "TSTypeAnnotation">
+        ).typeAnnotation?.type;
+        return type
+          ? t.tsTypeParameter(
+              t[
+                (type.slice(0, 2).toLowerCase() + type.slice(2)) as LowCaseCame<
+                  typeof type,
+                  2
+                >
+              ]?.(),
+              null,
+              param.name
+            )
+          : null;
+      })
+    );
   },
   ObjectExpression: <
     T extends {
       init: {
         properties: Array<ObjectTypeProperty | ObjectTypeSpreadProperty>;
       };
-      id: keyof Node
+      id: keyof Node;
     }
   >(
     node: T | ObjectTypeProperty[] | ObjectTypeSpreadProperty[],
@@ -47,7 +62,7 @@ const generateTsTypeMap: {
     } else {
       const {
         init: { properties },
-        id: key
+        id: key,
       } = node;
       return t.tsParenthesizedType(
         t.tsTypeLiteral(
@@ -55,7 +70,9 @@ const generateTsTypeMap: {
             if ((propert as ObjectTypeProperty).key) {
               return t.tsPropertySignature(
                 key,
-                t.tsTypeAnnotation(generateTsTypeMap[propert.value.type](node, path)),
+                t.tsTypeAnnotation(
+                  generateTsTypeMap[propert.value.type](node, path)
+                ),
                 key
               );
             }
@@ -64,36 +81,45 @@ const generateTsTypeMap: {
       );
     }
   },
-  MemberExpression: (node: UnionFlowType<Node, 'MemberExpression'>, path: any, option?: GenerateTsAstMapsOption) => {
-    const {
-      property,
-    } = node;
+  MemberExpression: (
+    node: UnionFlowType<Node, "MemberExpression">,
+    path: any,
+    option?: GenerateTsAstMapsOption
+  ) => {
+    const { property } = node;
     const { parent } = path;
-    if (property.type === 'Identifier') {
+    if (property.type === "Identifier") {
       return t.tsPropertySignature(
         property,
-        t.tsTypeAnnotation(generateTsTypeMap[parent.right.type](parent, path, option)),
+        t.tsTypeAnnotation(
+          generateTsTypeMap[parent.right.type](parent, path, option)
+        ),
         property
       );
-    } else if (property.type === 'PrivateName') {
-
-    } else { // expression 表达式
-
+    } else if (property.type === "PrivateName") {
+    } else {
+      // expression 表达式
     }
   },
-  ArrowFunctionExpression: (node: UnionFlowType<Flow, 'ArrowFunctionExpression'>, path, {
-    tsTypes
-  }: GenerateTsAstMapsOption) => {
-    const { params = [] } = node
-    const paramsType = generateTsTypeMap.TsTypeParameterDeclaration(params)
+  ArrowFunctionExpression: (
+    node: UnionFlowType<Flow, "ArrowFunctionExpression">,
+    path,
+    { tsTypes }: GenerateTsAstMapsOption
+  ) => {
+    const { params = [] } = node;
+    const paramsType = generateTsTypeMap.TsTypeParameterDeclaration(params);
 
-    return t.tsFunctionType(paramsType, params.map(param => t.identifier(param.name)), handleTsAst.Identifier(path, tsTypes, true));
+    return t.tsFunctionType(
+      paramsType,
+      params.map((param) => t.identifier(param.name)),
+      handleTsAst.Identifier(path, tsTypes)
+    );
   },
-}
+};
 
 //  js类型与Flow ast映射关系
 const generateFlowTypeMap: {
-  [key: string]: (...args: unknown[]) => Flow | Flow[]
+  [key: string]: (...args: unknown[]) => Flow | Flow[] | any;
 } = {
   NumericLiteral: t.numberTypeAnnotation, // js表达式
   TSNumberKeyword: t.numberTypeAnnotation, // TS类型
@@ -101,19 +127,45 @@ const generateFlowTypeMap: {
   TSStringKeyword: t.stringTypeAnnotation,
   BooleanLiteral: t.booleanTypeAnnotation,
   TSBooleanKeyword: t.booleanTypeAnnotation,
-  ParamterDeclaration: (params: UnionFlowType<Node, 'Identifier'>[]) => {
-    return t.typeParameterDeclaration(params.map(param => t.typeParameter(t.typeAnnotation(generateFlowTypeMap[(param.typeAnnotation as UnionFlowType<Node, 'TSTypeAnnotation'>).typeAnnotation?.type]?.()))))
+  ParamterDeclaration: (params: UnionFlowType<Node, "Identifier">[]) => {
+    return t.typeParameterDeclaration(
+      params.map((param) =>
+        t.typeParameter(
+          t.typeAnnotation(
+            generateFlowTypeMap[
+              (param.typeAnnotation as UnionFlowType<Node, "TSTypeAnnotation">)
+                .typeAnnotation?.type
+            ]?.()
+          )
+        )
+      )
+    );
   },
-  FunctionTypeParam: (params: UnionFlowType<Node, 'Identifier'>[]) => {
-    return params?.map(param => t.functionTypeParam(t.identifier(param.name), generateFlowTypeMap[(param.typeAnnotation as UnionFlowType<Node, 'TSTypeAnnotation'>).typeAnnotation?.type]?.()))
+  FunctionTypeParam: (params: UnionFlowType<Node, "Identifier">[]) => {
+    return params?.map((param) =>
+      t.functionTypeParam(
+        t.identifier(param.name),
+        generateFlowTypeMap[
+          (param.typeAnnotation as UnionFlowType<Node, "TSTypeAnnotation">)
+            .typeAnnotation?.type
+        ]?.()
+      )
+    );
   },
-  FunctionExpression: (node: UnionFlowType<Flow, 'ArrowFunctionExpression'>) => {
-    const { params } = node
-    const paramsType = generateFlowTypeMap.ParamterDeclaration(params)
-    const functionParams = generateFlowTypeMap.FunctionTypeParam(params)
-    const restParams = null
+  FunctionExpression: (
+    node: UnionFlowType<Flow, "ArrowFunctionExpression">
+  ) => {
+    const { params } = node;
+    const paramsType = generateFlowTypeMap.ParamterDeclaration(params);
+    const functionParams = generateFlowTypeMap.FunctionTypeParam(params);
+    const restParams = null;
 
-    return t.functionTypeAnnotation(paramsType, functionParams, restParams, t.anyTypeAnnotation());
+    return t.functionTypeAnnotation(
+      paramsType,
+      functionParams,
+      restParams,
+      t.anyTypeAnnotation()
+    );
   },
   ObjectExpression: <
     T extends {
@@ -138,36 +190,48 @@ const generateFlowTypeMap: {
             return t.objectTypeProperty(
               t.stringLiteral((propert.key as Identifier)?.name || propert.key),
               generateFlowTypeMap[propert.value.type](node, path),
-              option.optional ? t.variance("minus") : null
+              option?.optional ? t.variance("minus") : null
             );
           }
         })
       );
     }
   },
-  AssignmentExpression: (node: UnionFlowType<Node, 'AssignmentExpression'>) => {
-    const {
-      right: { type },
-    } = node;
-
-    return generateFlowTypeMap[type](node);
+  ArrowFunctionExpression: (
+    node: UnionFlowType<Node, "ArrowFunctionExpression">,
+    path: any
+  ) => {
+    const { body } = node;
+    if (t.isIdentifier(body)) {
+      const { name } = body as UnionFlowType<Node, "Identifier">;
+      const bindScopePath = path.scope.bindings[name];
+      return t.functionTypeAnnotation(
+        null,
+        [],
+        null,
+        handlePath(bindScopePath, [])
+      );
+    } else if (generateFlowTypeMap[body.type]) {
+      return generateFlowTypeMap[body.type](body, path);
+    }
   },
-  MemberExpression: (node: UnionFlowType<Node, 'MemberExpression'>, path: any, option?: GenerateTsAstMapsOption) => {
-    const {
-      property
-    } = node;
+  MemberExpression: (
+    node: UnionFlowType<Node, "MemberExpression">,
+    path: any,
+    option?: GenerateTsAstMapsOption
+  ) => {
+    const { property } = node;
     const { parent } = path;
-    if (property.type === 'Identifier') {
-      const { name } = property
+    if (property.type === "Identifier") {
+      const { name } = property;
       return t.objectTypeProperty(
         t.stringLiteral(name),
-        generateFlowTypeMap[parent.right.type](parent, path, option),
-        option.optional ? t.variance("minus") : null
+        generateFlowTypeMap[parent.right?.type]?.(parent, path, option),
+        option?.optional ? t.variance("minus") : null
       );
-    } else if (property.type === 'PrivateName') {
-
-    } else { // expression 表达式
-
+    } else if (property.type === "PrivateName") {
+    } else {
+      // expression 表达式
     }
   },
 };
@@ -176,19 +240,28 @@ const baseTsAstMaps: string[] = [
   "NumberTypeAnnotation",
   "StringTypeAnnotation",
   "BooleanTypeAnnotation",
-  "UnionTypeAnnotation"
+  "UnionTypeAnnotation",
+  "BooleanLiteral",
 ];
 
 // 对既有TSAst数据进行操作
 const curdGenerateTsAstMap = {
-  ObjectTypeAnnotation: (node: UnionFlowType<Node, 'ObjectTypeAnnotation'>, value: ObjectTypeProperty[] | ObjectTypeSpreadProperty[]) => {
+  ObjectTypeAnnotation: (
+    node: UnionFlowType<Node, "ObjectTypeAnnotation">,
+    value: ObjectTypeProperty[] | ObjectTypeSpreadProperty[]
+  ) => {
     const { properties } = node;
-    node.properties = properties.concat(value)
+    node.properties = properties.concat(value);
     return node;
   },
   // 基础类型转换成联合类型
-  BaseTypeUnionAnnotation: (node: FlowType | FlowType[], value: FlowType | FlowType[]): UnionFlowType<Node, 'TupleTypeAnnotation'> => {
-    return t.unionTypeAnnotation((Array.isArray(node) ? node : [node]).concat(value));
+  BaseTypeUnionAnnotation: (
+    node: FlowType | FlowType[],
+    value: FlowType | FlowType[]
+  ): UnionFlowType<Node, "TupleTypeAnnotation"> => {
+    return t.unionTypeAnnotation(
+      (Array.isArray(node) ? node : [node]).concat(value)
+    );
   },
 };
 
