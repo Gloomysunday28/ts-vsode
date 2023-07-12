@@ -37,7 +37,7 @@ const handleTsAstMaps =  {
     const { init } = node
 
     if (generateFlowTypeMaps[init.type]) {
-      ClassMethodTsTypes.push(generateFlowTypeMaps[init.type](node, path))
+      ClassMethodTsTypes.push(generateFlowTypeMaps[init.type](init, path))
     }
   },
   MemberExpression: (containerNode, ClassMethodTsTypes, path) => {
@@ -50,7 +50,7 @@ const handleTsAstMaps =  {
         ClassMethodTsTypes.push(
           t.objectTypeProperty(
             t.stringLiteral(key),
-            generateFlowTypeMaps[node.init.type](node, path, {
+            generateFlowTypeMaps[node.init.type](node.init, path, {
               optional: t.isBlockStatement(path.scope.block),
             })
           )

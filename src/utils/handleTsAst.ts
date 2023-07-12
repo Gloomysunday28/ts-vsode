@@ -75,31 +75,22 @@ export const handlePath = (referencePath, ClassMethodTsTypes) => {
     }
   });
 
-if (ClassMethodTsTypes.length) {
-  const returnASTNode = ClassMethodTsTypes[0]
-  const restReferencePaths = referencePath.referencePaths?.filter(path => (
-    path.key !== 'body' && path.key !== 'right'
-  ))
-  handleRerencePath(restReferencePaths, returnASTNode.properties)
-  returnASTNode.properties = postmathClassMethodTsAst(returnASTNode.properties)
-  
-  return returnASTNode
-}
+  if (ClassMethodTsTypes.length) {
+    const returnASTNode = ClassMethodTsTypes[0]
+    const restReferencePaths = referencePath.referencePaths?.filter(path => (
+      path.key !== 'body' && path.key !== 'right'
+    ))
+    handleRerencePath(restReferencePaths, returnASTNode.properties)
+    returnASTNode.properties = postmathClassMethodTsAst(returnASTNode.properties)
+    
+    return returnASTNode
+  } else {
+    return t.voidTypeAnnotation()
+  }
 };
 
 export default {
   Identifier: (bindScopePath, ClassMethodTsTypes) => {
-    const referencePath = bindScopePath.referencePaths.filter(
-      (path) => !t.isReturnStatement(path.parentPath.node)
-    );
-    handleRerencePath(referencePath, ClassMethodTsTypes);
-    const { type } = bindScopePath.path.node.init;
-    const returnType = baseTsAstMaps.includes(type)
-      ? generateFlowTypeMaps[type]()
-      : generateFlowTypeMaps[type]?.(
-          postmathClassMethodTsAst(ClassMethodTsTypes)
-        );
-
-    return returnType;
+    return handlePath(bindScopePath, ClassMethodTsTypes)
   },
 };

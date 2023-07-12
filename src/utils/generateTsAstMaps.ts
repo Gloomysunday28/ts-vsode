@@ -167,11 +167,14 @@ const generateFlowTypeMap: {
       t.anyTypeAnnotation()
     );
   },
+  VariableDeclarator: (node: UnionFlowType<Node, 'VariableDeclarator'>, path, option?: GenerateTsAstMapsOption) => {
+    const { init } = node
+
+    return generateTsTypeMaps[init.type](init, path, option)
+  },
   ObjectExpression: <
     T extends {
-      init: {
-        properties: Array<ObjectTypeProperty | ObjectTypeSpreadProperty>;
-      };
+      properties: Array<ObjectTypeProperty | ObjectTypeSpreadProperty>;
     }
   >(
     node: T | ObjectTypeProperty[] | ObjectTypeSpreadProperty[],
@@ -182,7 +185,7 @@ const generateFlowTypeMap: {
       return t.objectTypeAnnotation(node);
     } else {
       const {
-        init: { properties },
+        properties
       } = node;
       return t.objectTypeAnnotation(
         properties.map((propert: ObjectTypeProperty) => {
