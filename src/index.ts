@@ -29,7 +29,7 @@ export default class ScoreDetailPage extends Component<
     return getScore
   }
 
-  c(params: number) {
+  async c(params: number) {
     const obj = {}
     const f = {
       d: 2,
@@ -40,17 +40,17 @@ export default class ScoreDetailPage extends Component<
     obj.f = f
     var d = true
     // d = 2
+    obj.a = '1'
     if (true) {
       obj.a = 2
     }
-    obj.a = '1'
     obj.a = true
     obj.s = 'gdsag'
     obj.s = 2
     obj.s = false
     obj.d = d
     obj.f = 'true'
-    return f
+    return  () => obj
   }
 }
 `;

@@ -55,7 +55,6 @@ const generateTsTypeMap: {
   >(
     node: T | ObjectTypeProperty[] | ObjectTypeSpreadProperty[],
     path,
-    option?: GenerateTsAstMapsOption
   ) => {
     if (Array.isArray(node)) {
       return node[0];
@@ -117,7 +116,8 @@ const generateTsTypeMap: {
   },
 };
 
-//  js类型与Flow ast映射关系
+
+//  js类型与Flow ast映射关系 只针对该类型生成TSType
 const generateFlowTypeMap: {
   [key: string]: (...args: unknown[]) => Flow | Flow[] | any;
 } = {
@@ -200,6 +200,7 @@ const generateFlowTypeMap: {
       );
     }
   },
+  // 箭头函数
   ArrowFunctionExpression: (
     node: UnionFlowType<Node, "ArrowFunctionExpression">,
     path: any
@@ -218,6 +219,7 @@ const generateFlowTypeMap: {
       return generateFlowTypeMap[body.type](body, path);
     }
   },
+  // 对象属性
   MemberExpression: (
     node: UnionFlowType<Node, "MemberExpression">,
     path: any,
@@ -237,14 +239,33 @@ const generateFlowTypeMap: {
       // expression 表达式
     }
   },
+  // 数组
+  ArrayExpression: (node: UnionFlowType<Flow, 'ArrayExpression'>, path: any) => {
+    const { elements } = node
+    if (Array.isArray(elements)) {
+      return t.tupleTypeAnnotation((elements as Flow[])?.map(ele => {
+        if (t.isIdentifier(ele)) {
+          const bindScopePath = path.scope.bindings[(ele as unknown as Identifier).name]
+          return handleTsAst.Identifier(bindScopePath, [])
+        }
+        
+        return generateFlowTypeMap[ele.type](ele, path)
+      }))
+    }
+
+    return null
+  }
 };
 
+// 联合类型
 const baseTsAstMaps: string[] = [
   "NumberTypeAnnotation",
   "StringTypeAnnotation",
   "BooleanTypeAnnotation",
   "UnionTypeAnnotation",
   "BooleanLiteral",
+  "NumberLiteral",
+  "StringLiteral",
 ];
 
 // 对既有TSAst数据进行操作

@@ -26,28 +26,28 @@ const getNodeProperty =  {
 }
 
 const handleTsAstMaps =  {
-  AssignmentExpression: (node: UnionFlowType<Node, 'AssignmentExpression'>, ClassMethodTsTypes: Flow[], path: any) => {
+  AssignmentExpression: (node: UnionFlowType<Node, 'AssignmentExpression'>, tsAstTypes: Flow[], path: any) => {
     const { left } = node
     
     if (handleTsAstMaps[left.type]) {
-      handleTsAstMaps[left.type](left, ClassMethodTsTypes, path)
+      handleTsAstMaps[left.type](left, tsAstTypes, path)
     }
   },
-  VariableDeclarator: (node: UnionFlowType<Node, "VariableDeclarator">, ClassMethodTsTypes: Flow[], path) => {
+  VariableDeclarator: (node: UnionFlowType<Node, "VariableDeclarator">, tsAstTypes: Flow[], path) => {
     const { init } = node
 
     if (generateFlowTypeMaps[init.type]) {
-      ClassMethodTsTypes.push(generateFlowTypeMaps[init.type](init, path))
+      tsAstTypes.push(generateFlowTypeMaps[init.type](init, path))
     }
   },
-  MemberExpression: (containerNode, ClassMethodTsTypes, path) => {
+  MemberExpression: (containerNode, tsAstTypes, path) => {
     const property = containerNode.property.name as string;
     const isIdentifier = t.isIdentifier(getNodeProperty[path.parentPath.container.type](path.parentPath.container));
     if (isIdentifier) {
       const variable = path.parentPath.scope.bindings[property];
       (variable.path.container || [])?.forEach((node) => {
         const key = node.id?.name;
-        ClassMethodTsTypes.push(
+        tsAstTypes.push(
           t.objectTypeProperty(
             t.stringLiteral(key),
             generateFlowTypeMaps[node.init.type](node.init, path, {
@@ -57,8 +57,8 @@ const handleTsAstMaps =  {
         );
       });
 
-      if (Array.isArray(ClassMethodTsTypes)) {
-        const curentTsNode = ClassMethodTsTypes.find(
+      if (Array.isArray(tsAstTypes)) {
+        const curentTsNode = tsAstTypes.find(
           (tsnode) => tsnode.key.value === property
         );
         if (curentTsNode) {
@@ -78,7 +78,7 @@ const handleTsAstMaps =  {
       }
     } else {
       const { parentPath } = path;
-      ClassMethodTsTypes.push(
+      tsAstTypes.push(
         generateFlowTypeMaps[parentPath.type](parentPath.node, parentPath, {
           optional: t.isBlockStatement(parentPath.scope.block),
         })

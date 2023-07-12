@@ -1,18 +1,17 @@
 import {
-  generateFlowTypeMaps,
   curdGenerateTsAstMaps,
-  baseTsAstMaps,
 } from "../utils/generateTsAstMaps";
 import handleTsAstMaps from "./handleTsAstMaps";
 import type { Flow, Node } from "@babel/types";
 import { UnionFlowType, SureFlowType } from "../interface";
 const t = require("@babel/types");
 
-const postmathClassMethodTsAst = (ClassMethodTsTypes: Flow[]) => {
+// 当tsAstTypes收集到所有类型后, 开始做预后联合，将重复属性拼凑为联合类型
+const postmathClassMethodTsAst = (tsAstTypes: Flow[]) => {
   const redundancFlowMap: Map<string, Flow> = new Map();
   const redundancFlowArray: Flow[] = [];
 
-  ClassMethodTsTypes?.forEach((flow) => {
+  tsAstTypes?.forEach((flow) => {
     if (
       t.isObjectTypeProperty(flow) &&
       SureFlowType<Flow, UnionFlowType<Flow, "ObjectTypeProperty">>(flow)
@@ -31,6 +30,9 @@ const postmathClassMethodTsAst = (ClassMethodTsTypes: Flow[]) => {
           memoryFlowType
         )
       ) {
+        if (flow.variance && !memoryFlowType.variance) {
+          memoryFlowType.variance = flow.variance
+        }
         memoryFlowType.value = curdGenerateTsAstMaps.BaseTypeUnionAnnotation(
           t.isUnionTypeAnnotation(memoryFlowType.value)
             ? (
@@ -49,34 +51,37 @@ const postmathClassMethodTsAst = (ClassMethodTsTypes: Flow[]) => {
   return redundancFlowArray;
 };
 
-export const handleRerencePath = (referencePath, ClassMethodTsTypes) => {
+
+// 针对当前变量对应的局部作用域下可能会更改该变量的类型进行收集
+export const handleRerencePath = (referencePath, tsAstTypes) => {
   (referencePath || []).forEach((path) => {
     const containerNode = path.container;
     if (handleTsAstMaps[containerNode.type]) {
       handleTsAstMaps[containerNode.type]?.(
         containerNode,
-        ClassMethodTsTypes,
+        tsAstTypes,
         path
       );
     }
   });
 
-  return ClassMethodTsTypes;
+  return tsAstTypes;
 };
 
-export const handlePath = (referencePath, ClassMethodTsTypes) => {
+// 针对该变量定义时的变了进行类型收集
+export const handlePath = (referencePath, tsAstTypes) => {
   referencePath?.path?.container.forEach((node) => {
     if (handleTsAstMaps[node.type]) {
       handleTsAstMaps[node.type]?.(
         node,
-        ClassMethodTsTypes,
+        tsAstTypes,
         referencePath?.path
       );
     }
   });
 
-  if (ClassMethodTsTypes.length) {
-    const returnASTNode = ClassMethodTsTypes[0]
+  if (tsAstTypes.length) {
+    const returnASTNode = tsAstTypes[0]
     const restReferencePaths = referencePath.referencePaths?.filter(path => (
       path.key !== 'body' && path.key !== 'right'
     ))
@@ -90,7 +95,7 @@ export const handlePath = (referencePath, ClassMethodTsTypes) => {
 };
 
 export default {
-  Identifier: (bindScopePath, ClassMethodTsTypes) => {
-    return handlePath(bindScopePath, ClassMethodTsTypes)
+  Identifier: (bindScopePath, tsAstTypes) => {
+    return handlePath(bindScopePath, tsAstTypes)
   },
 };
